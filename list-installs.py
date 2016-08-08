@@ -17,6 +17,8 @@ SITE_SCRIPTS = [
     ]
 
 ANSIBLE_HOME_SCRIPT = '''import ansible; print(ansible.__file__)'''
+ANSIBLE_HOME_SCRIPT_SP = '''import sys; sys.path.insert(0, '%s'); import ansible; print(ansible.__file__)'''
+ANSIBLE_LIBRARY_SCRIPT = '''from ansible import constants; print(constants.DEFAULT_MODULE_PATH)'''
 
 def run_command(args):
     p = subprocess.Popen(args, 
@@ -30,17 +32,23 @@ def run_command(args):
 class AnsibleInstallLister(object):
     def __init__(self):
         self.paths = self.get_paths()
+        print("## $PATH")
         pprint(self.paths)
         self.python_paths = self.get_python_paths()
+        print("## PYTHON PATHS")
         pprint(self.python_paths)
         self.site_packages_paths = self.get_site_packages_paths()
+        print("## SITE-PACKAGES")
         pprint(self.site_packages_paths)
         self.ansible_paths = self.get_ansible_paths()
+        print("## ANSIBLE PATHS")
         pprint(self.ansible_paths)
         self.ansible_homedirs = self.get_ansible_homedirs()
+        print("## ANSIBLE HOME DIRS")
         pprint(self.ansible_homedirs)
         self.ansible_moduledirs = self.get_ansible_moduledirs()
-        #import epdb; epdb.st()
+        print("## ANSIBLE LIBRARY PATHS")
+        pprint(self.ansible_moduledirs)
 
     def get_paths(self):
         """List user's environment path(s)"""
@@ -81,7 +89,7 @@ class AnsibleInstallLister(object):
                 xpaths = so.split(';')
                 for xpath in xpaths:
                     xpath = xpath.strip()
-                    site_paths.append(xpath)                
+                    site_paths.append(xpath)
         site_paths = sorted(set(site_paths))
         return site_paths
 
@@ -102,13 +110,21 @@ class AnsibleInstallLister(object):
                 continue
             shebang = shebang.strip()
 
-            script = None
+            scripts = []
             if 'python' in shebang.lower():
-                script = shebang + '\n' + ANSIBLE_HOME_SCRIPT
+
+                # run with default sys.path
+                scripts.append(shebang + '\n' + ANSIBLE_HOME_SCRIPT)
+
+                # try combination of this shebang plus all known site-packages
+                for sp in self.site_packages_paths:
+                    sp_script = shebang + '\n' + ANSIBLE_HOME_SCRIPT_SP % sp
+                    scripts.append(sp_script)
+
             elif 'bash' in shebang:
-                script = self.get_homebrew_script(ap)
-                
-            if script:            
+                scripts.append(self.get_homebrew_script(ap))
+
+            for script in scripts:
                 output = self.run_script(script)
                 if not output:
                     continue
@@ -121,7 +137,7 @@ class AnsibleInstallLister(object):
         home_dirs = sorted(set(home_dirs))
         return home_dirs
 
-    def get_homebrew_script(self, binpath):
+    def get_homebrew_script(self, binpath, pyscript=None):
         """homebrew handler ... make assumptions"""
         lines = self.read_file_lines(binpath, lines=2)
         lines = lines.split('\n')
@@ -134,7 +150,10 @@ class AnsibleInstallLister(object):
         script = lines[0] + '\n'
         script += PYPATH
         script += ' '
-        script += '/usr/bin/python -c "' + ANSIBLE_HOME_SCRIPT + '"'
+        if pyscript:
+            script += '/usr/bin/python -c "' + pyscript + '"'
+        else:
+            script += '/usr/bin/python -c "' + ANSIBLE_HOME_SCRIPT + '"'
         return script
     
     def run_script(self, script):
@@ -156,8 +175,14 @@ class AnsibleInstallLister(object):
         return data
 
     def get_ansible_moduledirs(self):
-        #import epdb; epdb.st()    
-        return None
+
+        library_paths = []
+        for hpath in self.ansible_homedirs:
+            checkpath = os.path.join(hpath, 'modules')
+            if os.path.exists(checkpath):
+                library_paths.append(checkpath)
+        library_paths = sorted(set(library_paths))
+        return library_paths
 
 if __name__ == "__main__":
     AnsibleInstallLister()
