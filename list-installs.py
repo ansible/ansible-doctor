@@ -1,5 +1,9 @@
 #!/usr/bin/env python2
 
+'''
+list-installs.py - Show all known ansible installation paths
+'''
+
 import os
 import stat
 import sys
