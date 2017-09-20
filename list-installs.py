@@ -6,7 +6,6 @@ list-installs.py - Show all known ansible installation paths
 
 import os
 import stat
-import sys
 import subprocess
 import tempfile
 from pprint import pprint
@@ -14,17 +13,18 @@ from pprint import pprint
 SITE_SCRIPTS = [
     '''"import site; print(';'.join(site.getsitepackages()))"''',
     '''"import distutils.sysconfig; print(distutils.sysconfig.get_python_lib())"'''
-    ]
+]
 
 ANSIBLE_HOME_SCRIPT = '''import ansible; print(ansible.__file__)'''
 ANSIBLE_HOME_SCRIPT_SP = '''import sys; sys.path.insert(0, '%s'); import ansible; print(ansible.__file__)'''
 ANSIBLE_LIBRARY_SCRIPT = '''from ansible import constants; print(constants.DEFAULT_MODULE_PATH)'''
 
+
 def run_command(args):
-    p = subprocess.Popen(args, 
-                stdout=subprocess.PIPE, 
-                stderr=subprocess.PIPE,
-                shell=True)
+    p = subprocess.Popen(args,
+                         stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE,
+                         shell=True)
     (so, se) = p.communicate()
     return (p.returncode, so, se)
 
@@ -155,14 +155,14 @@ class AnsibleInstallLister(object):
         else:
             script += '/usr/bin/python -c "' + ANSIBLE_HOME_SCRIPT + '"'
         return script
-    
+
     def run_script(self, script):
         fo, fn = tempfile.mkstemp()
         with open(fn, 'wb') as f:
             f.write(script)
         os.close(fo)
         st = os.stat(fn)
-        os.chmod(fn, st.st_mode | stat.S_IEXEC)        
+        os.chmod(fn, st.st_mode | stat.S_IEXEC)
         (rc, so, se) = run_command(fn)
         os.remove(fn)
         return str(so) + str(se)
