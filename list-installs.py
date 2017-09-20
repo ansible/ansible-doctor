@@ -5,8 +5,8 @@ list-installs.py - Show all known ansible installation paths
 '''
 
 import os
+import pip
 import stat
-import sys
 import subprocess
 import tempfile
 from pprint import pprint
@@ -14,17 +14,18 @@ from pprint import pprint
 SITE_SCRIPTS = [
     '''"import site; print(';'.join(site.getsitepackages()))"''',
     '''"import distutils.sysconfig; print(distutils.sysconfig.get_python_lib())"'''
-    ]
+]
 
 ANSIBLE_HOME_SCRIPT = '''import ansible; print(ansible.__file__)'''
 ANSIBLE_HOME_SCRIPT_SP = '''import sys; sys.path.insert(0, '%s'); import ansible; print(ansible.__file__)'''
 ANSIBLE_LIBRARY_SCRIPT = '''from ansible import constants; print(constants.DEFAULT_MODULE_PATH)'''
 
+
 def run_command(args):
-    p = subprocess.Popen(args, 
-                stdout=subprocess.PIPE, 
-                stderr=subprocess.PIPE,
-                shell=True)
+    p = subprocess.Popen(args,
+                         stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE,
+                         shell=True)
     (so, se) = p.communicate()
     return (p.returncode, so, se)
 
@@ -49,6 +50,9 @@ class AnsibleInstallLister(object):
         self.ansible_moduledirs = self.get_ansible_moduledirs()
         print("## ANSIBLE LIBRARY PATHS")
         pprint(self.ansible_moduledirs)
+        print("## PYTHON MODULES ##")
+        self.python_modules = self.get_python_modules()
+        pprint(self.python_modules)
 
     def get_paths(self):
         """List user's environment path(s)"""
@@ -155,14 +159,14 @@ class AnsibleInstallLister(object):
         else:
             script += '/usr/bin/python -c "' + ANSIBLE_HOME_SCRIPT + '"'
         return script
-    
+
     def run_script(self, script):
         fo, fn = tempfile.mkstemp()
         with open(fn, 'wb') as f:
             f.write(script)
         os.close(fo)
         st = os.stat(fn)
-        os.chmod(fn, st.st_mode | stat.S_IEXEC)        
+        os.chmod(fn, st.st_mode | stat.S_IEXEC)
         (rc, so, se) = run_command(fn)
         os.remove(fn)
         return str(so) + str(se)
@@ -183,6 +187,13 @@ class AnsibleInstallLister(object):
                 library_paths.append(checkpath)
         library_paths = sorted(set(library_paths))
         return library_paths
+
+    def get_python_modules(self):
+        installed_packages = pip.get_installed_distributions()
+        installed_packages_list = sorted(["%s==%s" % (i.key, i.version) for i in installed_packages])
+
+        return installed_packages_list
+
 
 if __name__ == "__main__":
     AnsibleInstallLister()
