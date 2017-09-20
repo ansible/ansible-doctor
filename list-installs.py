@@ -5,6 +5,7 @@ list-installs.py - Show all known ansible installation paths
 '''
 
 import os
+import pip
 import stat
 import subprocess
 import tempfile
@@ -49,6 +50,9 @@ class AnsibleInstallLister(object):
         self.ansible_moduledirs = self.get_ansible_moduledirs()
         print("## ANSIBLE LIBRARY PATHS")
         pprint(self.ansible_moduledirs)
+        print("## PYTHON MODULES ##")
+        self.python_modules = self.get_python_modules()
+        pprint(self.python_modules)
 
     def get_paths(self):
         """List user's environment path(s)"""
@@ -183,6 +187,13 @@ class AnsibleInstallLister(object):
                 library_paths.append(checkpath)
         library_paths = sorted(set(library_paths))
         return library_paths
+
+    def get_python_modules(self):
+        installed_packages = pip.get_installed_distributions()
+        installed_packages_list = sorted(["%s==%s" % (i.key, i.version) for i in installed_packages])
+
+        return installed_packages_list
+
 
 if __name__ == "__main__":
     AnsibleInstallLister()
