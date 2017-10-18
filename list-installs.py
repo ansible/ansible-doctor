@@ -5,13 +5,14 @@ list-installs.py - Show all known ansible installation paths
 '''
 
 # ls -lh /usr/lib/python2.7/site-packages/ansible*
-# ansible/                                
+# ansible/
 # ansible-2.4.0-py2.7.egg/
-# ansible-2.4.0.0-py2.7.egg-info/         
+# ansible-2.4.0.0-py2.7.egg-info/
 # ansible_tower_cli-3.2.0-py2.7.egg-info/
 
 
 import glob
+import logging
 import os
 import stat
 import sys
@@ -29,11 +30,18 @@ ANSIBLE_HOME_SCRIPT_SP = '''import sys; sys.path.insert(0, '%s'); import ansible
 ANSIBLE_LIBRARY_SCRIPT = '''from ansible import constants; print(constants.DEFAULT_MODULE_PATH)'''
 
 
+
+class Args(object):
+    debug = False
+
+
 def run_command(args):
-    p = subprocess.Popen(args,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                shell=True)
+    p = subprocess.Popen(
+        args,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        shell=True
+    )
     (so, se) = p.communicate()
     return (p.returncode, so, se)
 
@@ -48,7 +56,11 @@ class AnsibleInstallLister(object):
     python_paths = []
     site_packages_paths = []
 
-    def __init__(self):
+    def __init__(self, args):
+
+        self.args = args
+        self.set_logger()
+
         print("## PACKAGES")
         self.packages = self.get_packages()
         pprint(self.packages)
@@ -71,9 +83,29 @@ class AnsibleInstallLister(object):
         print("## ANSIBLE LIBRARY PATHS")
         pprint(self.ansible_moduledirs)
 
+    def set_logger(self):
+        if hasattr(self.args, 'debug') and self.args.debug:
+            logging.level = logging.DEBUG
+        else:
+            logging.level = logging.INFO
+
+        logFormatter = \
+            logging.Formatter("%(asctime)s %(levelname)s %(message)s")
+        rootLogger = logging.getLogger()
+
+        if hasattr(self.args, 'debug') and self.args.debug:
+            rootLogger.setLevel(logging.DEBUG)
+        else:
+            rootLogger.setLevel(logging.INFO)
+
+        consoleHandler = logging.StreamHandler()
+        consoleHandler.setFormatter(logFormatter)
+        rootLogger.addHandler(consoleHandler)
+
     def get_packages(self):
         packages = {'rpm':[], 'pip': []}
 
+        logging.debug('checking for rpm command')
         (rc, so, se) = run_command('which rpm')
         if rc == 0:
             (rc, so, se) = run_command('rpm -qa | egrep -i ^ansible')
@@ -90,24 +122,30 @@ class AnsibleInstallLister(object):
 
                 packages['rpm'].append(data)
 
-        SITEDIRS = self.get_site_packages_paths()
+        SITEDIRS = self.get_site_packages_paths()[:]
         SITEDIRS.append(None)
         locations = []
 
+        logging.debug('getting pip paths')
         pips = self.get_pip_paths()
 
         for pip in pips:
             for SD in SITEDIRS:
 
                 if SD is None:
-                    (rc, so, se) = run_command('{} show -f ansible'.format(pip))
+                    cmd = '{} show -f ansible'.format(pip)
                 else:
-                    (rc, so, se) = run_command('PYTHONUSERBASE={} {} show -f ansible'.format(SD, pip))
+                    cmd = 'PYTHONUSERBASE={} {} show -f ansible'.format(SD, pip)
+
+                logging.debug(cmd)
+                (rc, so, se) = run_command(cmd)
 
                 if rc == 0:
+
+                    logging.debug(so)
+
                     version = None
                     prefix = None
-                    filepaths = []
                     filechecks = []
 
                     lines = so.split('\n')
@@ -216,6 +254,9 @@ class AnsibleInstallLister(object):
             if gf:
                 site_paths += gf
 
+        # hack for jtanner's machine
+        site_paths = [x for x in site_paths if '/workspace' not in x]
+
         site_paths = sorted(set(site_paths))
 
         self.site_packages_paths = site_paths
@@ -267,6 +308,8 @@ class AnsibleInstallLister(object):
     def get_ansible_homedirs(self):
         home_dirs = []
         for ap in self.ansible_paths:
+            if ap is None:
+                continue
             if '->' in ap:
                 ap = ap.split('->')[-1].strip()
             shebang = self.read_file_lines(ap)
@@ -289,6 +332,8 @@ class AnsibleInstallLister(object):
                 scripts.append(self.get_homebrew_script(ap))
 
             for script in scripts:
+                if script is None:
+                    continue
                 output = self.run_script(script)
                 if not output:
                     continue
@@ -354,5 +399,11 @@ class AnsibleInstallLister(object):
         library_paths = sorted(set(library_paths))
         return library_paths
 
+
 if __name__ == "__main__":
-    AnsibleInstallLister()
+
+    args = Args()
+    if '--debug' in sys.argv:
+        args.debug = True
+
+    AnsibleInstallLister(args)
