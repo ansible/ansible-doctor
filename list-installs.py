@@ -117,6 +117,7 @@ class AnsibleInstallLister(object):
                 (rc, so, se) = run_command('rpm -qV {}'.format(_p))
                 if so.strip():
                     data['verify'] = so.split('\n')
+                    data['verify'] = [x for x in data['verify'] if x]
                 else:
                     data['verify'] = []
 
@@ -167,6 +168,9 @@ class AnsibleInstallLister(object):
                         if infiles:
                             fp = line.strip()
                             fp = os.path.join(prefix, fp)
+
+                            if 'cannot locate installed-files.txt' in line.lower():
+                                continue
 
                             if not os.path.exists(fp):
                                 filechecks.append('M {}'.format(fp))
