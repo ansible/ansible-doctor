@@ -1,4 +1,5 @@
 # ansible-doctor
-tools to resolve ansible installation issues
 
-1. list-installs - crawls through common locations, evaluates and lists all installations of ansible
+THIS REPO IS DEPRECATED AND THE TOOLS HAVE BEEN MOVED TO ...
+
+https://github.com/jctanner/ansible-tools
